@@ -6,8 +6,15 @@ import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename="/casetracker">
       <App />
     </BrowserRouter>
   </React.StrictMode>
 );
+
+// Register the service worker (PWA) in production only — keeps dev HMR clean.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').catch(() => {});
+  });
+}
