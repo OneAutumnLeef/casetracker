@@ -1,0 +1,16 @@
+{
+  "name": "CaseTracker — Competitions & Teams",
+  "short_name": "CaseTracker",
+  "description": "A shared platform to track MBA case competitions and build teams across your community.",
+  "start_url": "/casetracker/",
+  "scope": "/casetracker/",
+  "display": "standalone",
+  "background_color": "#050506",
+  "theme_color": "#050506",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "education"],
+  "icons": [
+    { "src": "/casetracker/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/casetracker/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
