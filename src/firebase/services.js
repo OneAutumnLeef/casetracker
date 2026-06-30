@@ -150,21 +150,33 @@ export function subscribeCompetitions(callback) {
     (err) => { markFirebaseOffline(err); localCompetitions.subscribe(callback); });
 }
 
-// Add any seed competition that's missing from the live data (matched by
-// seedKey, falling back to name). Runs whether the collection is empty or
-// already populated, so newly-added seed entries appear for everyone without
-// creating duplicates. Note: a seed comp you delete will reappear on reload.
+// Reconcile the live data with the seed list. Two safe, non-destructive jobs:
+//   1. ADD any seed competition that's missing (matched by seedKey or name) —
+//      so new entries appear for everyone, even on a populated database.
+//   2. BACKFILL the timeline (and seedKey) onto an existing seed-matched comp
+//      that has no timeline yet — so older records gain their milestones.
+// It never overwrites a field that's already set, so edits are preserved.
+// (Caveat: a seed comp you delete reappears on reload.)
 export async function reconcileSeedCompetitions(existing) {
-  const have = new Set();
-  existing.forEach((c) => { if (c.seedKey) have.add(c.seedKey); if (c.name) have.add(c.name); });
-  const missing = seedCompetitions.filter((s) => !have.has(s.seedKey) && !have.has(s.name));
-  if (!missing.length) return;
-  if (useLocalStore()) { missing.forEach(({ id, ...data }) => localCompetitions.add(data)); return; }
+  const match = (s) => existing.find((c) => (s.seedKey && c.seedKey === s.seedKey) || c.name === s.name) || null;
+  const missing = seedCompetitions.filter((s) => !match(s));
+  const toPatch = seedCompetitions
+    .map((s) => ({ s, ex: match(s) }))
+    .filter(({ s, ex }) => ex && s.timeline?.length && !(ex.timeline?.length));
+  if (!missing.length && !toPatch.length) return;
+
+  const applyLocal = () => {
+    missing.forEach(({ id, ...data }) => localCompetitions.add(data));
+    toPatch.forEach(({ s, ex }) => localCompetitions.update(ex.id, { timeline: s.timeline, seedKey: s.seedKey }));
+  };
+  if (useLocalStore()) return applyLocal();
+
   try {
     const batch = writeBatch(db);
     missing.forEach(({ id, ...data }) => batch.set(doc(competitionsRef()), { ...data, createdAt: serverTimestamp() }));
+    toPatch.forEach(({ s, ex }) => batch.set(doc(db, 'competitions', ex.id), { timeline: s.timeline, seedKey: s.seedKey }, { merge: true }));
     await batch.commit();
-  } catch (error) { markFirebaseOffline(error); missing.forEach(({ id, ...data }) => localCompetitions.add(data)); }
+  } catch (error) { markFirebaseOffline(error); applyLocal(); }
 }
 
 export async function addCompetition(data) {
