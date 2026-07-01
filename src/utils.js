@@ -103,6 +103,36 @@ export const monthGrid = (year, month) => {
 export const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
+// ── Domains / tracks ─────────────────────────────────
+export const DOMAINS = ['General', 'Consulting', 'Finance', 'Marketing', 'Product', 'Operations', 'Analytics'];
+export const DOMAIN_COLORS = {
+  General: '#a1a1aa', Consulting: '#8b7cff', Finance: '#34d399', Marketing: '#fb7faf',
+  Product: '#60a5fa', Operations: '#fbbf24', Analytics: '#5eead4',
+};
+export const domainColor = (d) => DOMAIN_COLORS[d] || DOMAIN_COLORS.General;
+export const domainAbbr = (d = 'General') => ({ General: 'Gen', Consulting: 'Con', Finance: 'Fin', Marketing: 'Mkt', Product: 'Prod', Operations: 'Ops', Analytics: 'Anl' }[d] || d.slice(0, 3));
+
+const DOMAIN_ALIASES = {
+  con: 'Consulting', consult: 'Consulting', consulting: 'Consulting', strategy: 'Consulting',
+  fin: 'Finance', finance: 'Finance', financial: 'Finance',
+  mkt: 'Marketing', market: 'Marketing', marketing: 'Marketing', brand: 'Marketing',
+  prod: 'Product', product: 'Product', pm: 'Product',
+  ops: 'Operations', operations: 'Operations', supply: 'Operations',
+  analytics: 'Analytics', data: 'Analytics', ba: 'Analytics',
+  gen: 'General', general: 'General', gm: 'General',
+};
+const domainFromToken = (t) => {
+  if (DOMAIN_ALIASES[t]) return DOMAIN_ALIASES[t];
+  const hit = Object.keys(DOMAIN_ALIASES).find((k) => t.startsWith(k));
+  return hit ? DOMAIN_ALIASES[hit] : null;
+};
+
+export const domainCounts = (members) => {
+  const map = {};
+  members.forEach((m) => { const d = m.domain || 'General'; map[d] = (map[d] || 0) + 1; });
+  return map;
+};
+
 // ── Member queries ───────────────────────────────────
 export const teamsForMemberInComp = (teams, memberId, compId) =>
   teams.filter((t) => t.competitionId === compId && t.memberIds?.includes(memberId));
@@ -111,20 +141,47 @@ export const totalTeamsForMember = (teams, memberId) =>
   teams.filter((t) => t.memberIds?.includes(memberId)).length;
 
 // ── Parse bulk member paste ──────────────────────────
-// Each line: "Name" | "Name, female" | "Name, female, non-engineering"
+// Each line: "Name" | "Name, female" | "Name, female, non-engineering, finance"
+// Tokens after the name (any order): gender, background, domain.
 export const parseMemberLines = (text) => {
   return text.split('\n').map((line) => line.trim()).filter(Boolean).map((line) => {
     const parts = line.split(/[,\t]/).map((p) => p.trim()).filter(Boolean);
     const name = parts[0];
     let gender = 'male';
     let background = 'engineering';
+    let domain = 'General';
     parts.slice(1).forEach((token) => {
       const t = token.toLowerCase();
+      const dom = domainFromToken(t);
       if (['f', 'female', 'woman', 'w'].includes(t)) gender = 'female';
       else if (['m', 'male', 'man'].includes(t)) gender = 'male';
       else if (t.startsWith('non') || t.startsWith('arts') || t.startsWith('commerce') || t === 'mgmt') background = 'non-engineering';
       else if (t.startsWith('eng') || t.startsWith('tech') || t.startsWith('btech') || t.startsWith('b.tech')) background = 'engineering';
+      else if (dom) domain = dom;
     });
-    return { name, gender, background, color: colorForName(name) };
+    return { name, gender, background, domain, color: colorForName(name) };
   }).filter((m) => m.name);
+};
+
+// ── ICS export ───────────────────────────────────────
+const icsEscape = (s = '') => String(s).replace(/[\\,;]/g, (m) => '\\' + m).replace(/\r?\n/g, '\\n');
+export const buildICS = (competitions, calName = 'CaseTracker') => {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CaseTracker//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icsEscape(calName)}`];
+  competitions.forEach((c) => compEvents(c).forEach((e, i) => {
+    if (!e.date) return;
+    const start = e.date.replace(/-/g, '');
+    const desc = [eventType(e.type).label + (e.time ? ` at ${e.time}` : ''), c.organizer, c.externalLink].filter(Boolean).join('\n');
+    lines.push(
+      'BEGIN:VEVENT',
+      `UID:${c.id || c.seedKey || 'c'}-${i}-${start}@casetracker`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${start}`,
+      `SUMMARY:${icsEscape(`${c.name} — ${e.label}`)}`,
+      `DESCRIPTION:${icsEscape(desc)}`,
+      'END:VEVENT',
+    );
+  }));
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
 };

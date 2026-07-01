@@ -6,17 +6,17 @@ import {
 } from '@dnd-kit/core';
 import { useAppData } from '../App';
 import {
-  getCompetition, subscribeTeams, addTeam, updateTeam, deleteTeam, moveMemberToTeam, deleteCompetition,
+  getCompetition, subscribeTeams, addTeam, updateTeam, deleteTeam, moveMemberToTeam, deleteCompetition, setInterest,
 } from '../firebase/services';
 import {
   ArrowLeft, Plus, Trash2, ExternalLink, Users, Layers, Calendar, Award, Edit3, AlertCircle,
-  Lock, Unlock, Shuffle, Wand2, Copy, Download, GripVertical, Check, Crown, ChevronDown,
+  Lock, Unlock, Shuffle, Wand2, Copy, Download, GripVertical, Check, Crown, ChevronDown, Star, Heart,
 } from 'lucide-react';
 import Avatar from '../components/Avatar';
 import CompositionBar from '../components/CompositionBar';
 import Timeline from '../components/Timeline';
 import CompetitionFormModal from '../components/CompetitionFormModal';
-import { composition, deadlineInfo, formatDate } from '../utils';
+import { composition, deadlineInfo, formatDate, domainColor, domainAbbr, domainCounts } from '../utils';
 
 const shuffle = (arr) => {
   const a = [...arr];
@@ -28,7 +28,7 @@ const RESULTS = ['', 'qualified', 'finalist', 'winner', 'runner-up', 'eliminated
 
 export default function CompetitionPage() {
   const { id } = useParams();
-  const { members, competitions } = useAppData();
+  const { members, competitions, viewMember } = useAppData();
   const navigate = useNavigate();
   const [comp, setComp] = useState(null);
   const [teams, setTeams] = useState([]);
@@ -38,6 +38,7 @@ export default function CompetitionPage() {
   const [activeMember, setActiveMember] = useState(null);
   const [flash, setFlash] = useState('');
   const [poolSearch, setPoolSearch] = useState('');
+  const [poolInterestedOnly, setPoolInterestedOnly] = useState(false);
 
   const competition = competitions.find((c) => c.id === id) || comp;
 
@@ -58,9 +59,21 @@ export default function CompetitionPage() {
   const getMember = (mid) => memberById[mid];
   const maxSize = competition?.teamSize || 0;
 
+  const interestedIds = useMemo(() => new Set(competition?.interestedIds || []), [competition]);
   const assignedIds = useMemo(() => new Set(teams.flatMap((t) => t.memberIds || [])), [teams]);
   const unassigned = members.filter((m) => !assignedIds.has(m.id));
-  const filteredPool = unassigned.filter((m) => m.name?.toLowerCase().includes(poolSearch.toLowerCase()));
+  const interestedFreeCount = unassigned.filter((m) => interestedIds.has(m.id)).length;
+  const filteredPool = unassigned
+    .filter((m) => m.name?.toLowerCase().includes(poolSearch.toLowerCase()))
+    .filter((m) => !poolInterestedOnly || interestedIds.has(m.id))
+    .sort((a, b) => (interestedIds.has(b.id) ? 1 : 0) - (interestedIds.has(a.id) ? 1 : 0) || a.name.localeCompare(b.name));
+  const myInterest = viewMember ? interestedIds.has(viewMember.id) : false;
+
+  const toggleMyInterest = async () => {
+    if (!viewMember) return;
+    await setInterest(id, viewMember.id, !myInterest);
+    showToast(!myInterest ? `${viewMember.name} marked interested.` : 'Interest removed.');
+  };
 
   if (!competition) return <div className="animate-fade-up"><p className="muted">Loading…</p></div>;
 
@@ -146,10 +159,10 @@ export default function CompetitionPage() {
     (t.memberIds?.length ? t.memberIds.map((mid) => `• ${getMember(mid)?.name || '—'}${t.leadId === mid ? ' (lead)' : ''}`).join('\n') : '(no members yet)');
   const copyAll = () => copy(`${competition.name}\n\n${teams.map(rosterText).join('\n\n')}`);
   const exportCsv = () => {
-    const rows = [['Team', 'Member', 'Gender', 'Background', 'Lead', 'Registered', 'Round', 'Result']];
+    const rows = [['Team', 'Member', 'Gender', 'Background', 'Domain', 'Lead', 'Registered', 'Round', 'Result']];
     teams.forEach((t) => (t.memberIds?.length ? t.memberIds : ['']).forEach((mid) => {
       const m = getMember(mid);
-      rows.push([t.name, m?.name || '', m?.gender || '', m?.background || '', t.leadId === mid ? 'yes' : '', t.registered ? 'yes' : 'no', t.round || 0, t.result || '']);
+      rows.push([t.name, m?.name || '', m?.gender || '', m?.background || '', m?.domain || '', t.leadId === mid ? 'yes' : '', t.registered ? 'yes' : 'no', t.round || 0, t.result || '']);
     }));
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -200,6 +213,19 @@ export default function CompetitionPage() {
             </section>
           )}
 
+          <div className="interest-bar">
+            <span className="interest-info">
+              <Heart size={15} /> <strong>{interestedIds.size}</strong> interested{interestedFreeCount > 0 ? ` · ${interestedFreeCount} still free` : ''}
+            </span>
+            {viewMember ? (
+              <button className={`btn ${myInterest ? 'btn-secondary' : 'btn-primary'} interest-toggle`} onClick={toggleMyInterest}>
+                <Star size={15} className={myInterest ? 'filled' : ''} /> {myInterest ? "You're in" : "I'm interested"}
+              </button>
+            ) : (
+              <span className="muted sm">Pick yourself in the top bar to flag interest.</span>
+            )}
+          </div>
+
           {/* ── Team builder ── */}
           <div className="builder-head">
             <h2 className="section-title sm">Teams ({teams.length})</h2>
@@ -221,9 +247,13 @@ export default function CompetitionPage() {
             <div className="team-builder">
               <PoolZone
                 count={unassigned.length}
+                interestedCount={interestedFreeCount}
                 search={poolSearch}
                 setSearch={setPoolSearch}
                 members={filteredPool}
+                interestedIds={interestedIds}
+                interestedOnly={poolInterestedOnly}
+                setInterestedOnly={setPoolInterestedOnly}
               />
 
               <div className="teams-area">
@@ -312,20 +342,27 @@ export default function CompetitionPage() {
 }
 
 // ── Pool (droppable list of free members) ────────────
-function PoolZone({ count, search, setSearch, members }) {
+function PoolZone({ count, interestedCount, search, setSearch, members, interestedIds, interestedOnly, setInterestedOnly }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'pool' });
   return (
     <div className="pool">
       <div className="pool-head">
         <h3>Free members <span className="count-badge">{count}</span></h3>
-        <p className="muted sm">Drag people into a team.</p>
+        <p className="muted sm">Drag people into a team. <Star size={11} className="inline-star" /> = interested.</p>
       </div>
-      <input className="form-input pool-search" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="pool-controls">
+        <input className="form-input pool-search" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {interestedCount > 0 && (
+          <button className={`filter-chip subtle${interestedOnly ? ' active' : ''}`} onClick={() => setInterestedOnly(!interestedOnly)} title="Show only interested people">
+            <Star size={12} /> {interestedCount}
+          </button>
+        )}
+      </div>
       <div ref={setNodeRef} className={`pool-list${isOver ? ' over' : ''}`}>
         {members.length === 0 ? (
-          <div className="pool-empty">{count === 0 ? 'Everyone is on a team 🎉' : 'No matches'}</div>
+          <div className="pool-empty">{count === 0 ? 'Everyone is on a team 🎉' : (interestedOnly ? 'No interested people free' : 'No matches')}</div>
         ) : (
-          members.map((m) => <DraggableMember key={m.id} member={m} />)
+          members.map((m) => <DraggableMember key={m.id} member={m} interested={interestedIds.has(m.id)} />)
         )}
       </div>
     </div>
@@ -333,18 +370,20 @@ function PoolZone({ count, search, setSearch, members }) {
 }
 
 // ── Draggable member chip ────────────────────────────
-function DraggableMember({ member, isLead, onRemove, locked }) {
+function DraggableMember({ member, isLead, onRemove, locked, interested }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `member:${member.id}`, data: { memberId: member.id }, disabled: locked,
   });
   return (
-    <div ref={setNodeRef} className={`member-chip${isDragging ? ' dragging' : ''}${locked ? ' locked' : ''}`}>
+    <div ref={setNodeRef} className={`member-chip${isDragging ? ' dragging' : ''}${locked ? ' locked' : ''}${interested ? ' interested' : ''}`}>
       <span className="drag-handle" {...listeners} {...attributes}><GripVertical size={14} /></span>
       <Avatar member={member} size={26} />
       <Link to={`/member/${member.id}`} className="chip-name" onClick={(e) => e.stopPropagation()}>{member.name}</Link>
       <span className="chip-tags">
+        {interested && <Star size={12} className="chip-star" title="Interested" />}
         <span className={`dot ${member.gender}`} title={member.gender} />
         <span className="chip-bg">{member.background === 'engineering' ? 'E' : 'N'}</span>
+        <span className="chip-domain" style={{ color: domainColor(member.domain) }} title={member.domain || 'General'}>{domainAbbr(member.domain)}</span>
       </span>
       {isLead && <Crown size={13} className="lead-icon" title="Team lead" />}
       {onRemove && !locked && <button className="chip-remove" onClick={onRemove} title="Remove"><Trash2 size={13} /></button>}
@@ -420,6 +459,13 @@ function TeamCard({ team, comp, getMember, onRemove, onCopy, showToast }) {
       </div>
 
       {teamMembers.length > 0 && <CompositionBar members={teamMembers} />}
+      {teamMembers.length > 0 && (
+        <div className="team-domains">
+          {Object.entries(domainCounts(teamMembers)).map(([d, n]) => (
+            <span key={d} className="domain-chip" style={{ color: domainColor(d), background: domainColor(d) + '1f' }}>{domainAbbr(d)} {n}</span>
+          ))}
+        </div>
+      )}
 
       <button className="status-toggle" onClick={() => setExpanded((e) => !e)}>
         <span>{team.registered ? '● Registered' : '○ Not registered'}{comp.rounds > 0 ? ` · Round ${team.round || 0}/${comp.rounds}` : ''}{team.result ? ` · ${team.result}` : ''}</span>
@@ -479,10 +525,10 @@ function Modalish({ onClose, title, children }) {
 }
 
 // Interleave members across category buckets so round-robin assignment spreads
-// gender + background as evenly as possible. Buckets shuffled for randomness.
+// gender + background + domain as evenly as possible. Buckets shuffled for randomness.
 function interleaveByCategory(members) {
   const groups = {};
-  shuffle(members).forEach((m) => { const k = `${m.background}|${m.gender}`; (groups[k] ||= []).push(m); });
+  shuffle(members).forEach((m) => { const k = `${m.background}|${m.gender}|${m.domain || 'General'}`; (groups[k] ||= []).push(m); });
   const keys = Object.keys(groups);
   const out = [];
   let more = true;

@@ -1,8 +1,8 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppData } from '../App';
-import { ArrowLeft, Trophy, Users, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Trophy, Users, AlertTriangle, Star } from 'lucide-react';
 import Avatar from '../components/Avatar';
-import { deadlineInfo, formatDate } from '../utils';
+import { deadlineInfo, formatDate, domainColor, domainAbbr } from '../utils';
 
 export default function MemberProfile() {
   const { id } = useParams();
@@ -16,8 +16,8 @@ export default function MemberProfile() {
   // Competitions sorted: ones they're on first, then by deadline.
   const rows = competitions.map((c) => {
     const teamsHere = allTeams.filter((t) => t.competitionId === c.id && t.memberIds?.includes(id));
-    return { comp: c, team: teamsHere[0] || null, conflict: teamsHere.length > 1 };
-  }).sort((a, b) => (b.team ? 1 : 0) - (a.team ? 1 : 0));
+    return { comp: c, team: teamsHere[0] || null, conflict: teamsHere.length > 1, interested: (c.interestedIds || []).includes(id) };
+  }).sort((a, b) => ((b.team || b.interested) ? 1 : 0) - ((a.team || a.interested) ? 1 : 0));
 
   return (
     <div className="animate-fade-up">
@@ -30,6 +30,7 @@ export default function MemberProfile() {
           <div className="tags">
             <span className={`mini-tag ${member.gender}`}>{member.gender === 'male' ? '♂ Male' : '♀ Female'}</span>
             <span className="mini-tag bg">{member.background === 'engineering' ? 'Engineering' : 'Non-Engineering'}</span>
+            <span className="mini-tag domain" style={{ color: domainColor(member.domain), background: domainColor(member.domain) + '22' }}>{member.domain || 'General'}</span>
             <span className="mini-tag count">{memberTeams.length} team{memberTeams.length !== 1 ? 's' : ''}</span>
           </div>
         </div>
@@ -41,10 +42,10 @@ export default function MemberProfile() {
         <div className="empty-card"><Trophy size={44} /><h3>No competitions</h3><p>Add competitions from the overview.</p></div>
       ) : (
         <div className="assignment-grid">
-          {rows.map(({ comp, team, conflict }) => {
+          {rows.map(({ comp, team, conflict, interested }) => {
             const dl = deadlineInfo(comp.deadline);
             return (
-              <div key={comp.id} className={`assignment-card${team ? ' assigned' : ''}`} onClick={() => navigate(`/competition/${comp.id}`)}>
+              <div key={comp.id} className={`assignment-card${team ? ' assigned' : interested ? ' interested' : ''}`} onClick={() => navigate(`/competition/${comp.id}`)}>
                 <div className="assignment-top">
                   <span className={`status-pill ${comp.status || 'upcoming'}`}>{comp.status || 'upcoming'}</span>
                   {comp.deadline && <span className={`deadline-tag ${dl.tone}`}>{formatDate(comp.deadline, { day: 'numeric', month: 'short' })}</span>}
@@ -52,7 +53,9 @@ export default function MemberProfile() {
                 <h4>{comp.name}</h4>
                 {conflict && <p className="conflict"><AlertTriangle size={13} /> In more than one team here</p>}
                 {team ? (
-                  <p className="assigned-team"><Users size={13} /> {team.name}{team.leadId === id ? ' · lead' : ''}</p>
+                  <p className="assigned-team"><Users size={13} /> {team.name}{team.registered ? ' · registered' : ''}{team.leadId === id ? ' · lead' : ''}</p>
+                ) : interested ? (
+                  <p className="interested-note"><Star size={13} /> Interested — no team yet</p>
                 ) : (
                   <p className="not-assigned">{comp.isIndividual ? 'Individual competition' : 'Not on a team yet'}</p>
                 )}

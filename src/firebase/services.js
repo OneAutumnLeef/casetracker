@@ -1,6 +1,6 @@
 import {
-  collection, doc, getDocs, getDoc, addDoc, setDoc, deleteDoc,
-  query, orderBy, onSnapshot, serverTimestamp, writeBatch, where,
+  collection, doc, getDocs, getDoc, addDoc, setDoc, deleteDoc, updateDoc,
+  query, orderBy, onSnapshot, serverTimestamp, writeBatch, where, arrayUnion, arrayRemove,
 } from 'firebase/firestore';
 import { db } from './config';
 import { seedCompetitions, seedMembers, seedTeams } from '../data/seedData';
@@ -114,27 +114,31 @@ export async function updateMember(id, data) {
   catch (error) { markFirebaseOffline(error); return localMembers.update(id, data); }
 }
 
+function localRemoveMemberEverywhere(id) {
+  localTeams.getAll().forEach((t) => {
+    if (t.memberIds?.includes(id)) localTeams.update(t.id, { memberIds: t.memberIds.filter((m) => m !== id) });
+  });
+  localCompetitions.getAll().forEach((c) => {
+    if (c.interestedIds?.includes(id)) localCompetitions.update(c.id, { interestedIds: c.interestedIds.filter((m) => m !== id) });
+  });
+}
 export async function deleteMember(id) {
-  if (useLocalStore()) {
-    localTeams.getAll().forEach((t) => {
-      if (t.memberIds?.includes(id)) localTeams.update(t.id, { memberIds: t.memberIds.filter((m) => m !== id) });
-    });
-    return localMembers.remove(id);
-  }
+  if (useLocalStore()) { localRemoveMemberEverywhere(id); return localMembers.remove(id); }
   try {
-    const teamsSnap = await getDocs(collection(db, 'teams'));
+    const [teamsSnap, compsSnap] = await Promise.all([getDocs(collection(db, 'teams')), getDocs(collection(db, 'competitions'))]);
     const batch = writeBatch(db);
     teamsSnap.docs.forEach((teamDoc) => {
       const t = teamDoc.data();
       if (t.memberIds?.includes(id)) batch.update(teamDoc.ref, { memberIds: t.memberIds.filter((m) => m !== id) });
     });
+    compsSnap.docs.forEach((compDoc) => {
+      if (compDoc.data().interestedIds?.includes(id)) batch.update(compDoc.ref, { interestedIds: arrayRemove(id) });
+    });
     batch.delete(doc(db, 'members', id));
     return await batch.commit();
   } catch (error) {
     markFirebaseOffline(error);
-    localTeams.getAll().forEach((t) => {
-      if (t.memberIds?.includes(id)) localTeams.update(t.id, { memberIds: t.memberIds.filter((m) => m !== id) });
-    });
+    localRemoveMemberEverywhere(id);
     return localMembers.remove(id);
   }
 }
@@ -217,6 +221,23 @@ export async function getCompetition(id) {
     const snap = await getDoc(doc(db, 'competitions', id));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   } catch (error) { markFirebaseOffline(error); return localCompetitions.getById(id); }
+}
+
+// Toggle a member's interest in a competition (atomic array op → no races when
+// several people flag interest at once).
+const localInterest = (compId, memberId, interested) => {
+  const c = localCompetitions.getById(compId);
+  const set = new Set(c?.interestedIds || []);
+  if (interested) set.add(memberId); else set.delete(memberId);
+  localCompetitions.update(compId, { interestedIds: [...set] });
+};
+export async function setInterest(compId, memberId, interested) {
+  if (useLocalStore()) return localInterest(compId, memberId, interested);
+  try {
+    return await updateDoc(doc(db, 'competitions', compId), {
+      interestedIds: interested ? arrayUnion(memberId) : arrayRemove(memberId),
+    });
+  } catch (error) { markFirebaseOffline(error); return localInterest(compId, memberId, interested); }
 }
 
 // ── Teams ────────────────────────────────────────────

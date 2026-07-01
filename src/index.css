@@ -467,6 +467,47 @@ select.form-input { appearance: none; cursor: pointer; }
 .status-chip.registered { background: rgba(52,211,153,0.16); color: var(--green); }
 .status-chip.pending { background: rgba(251,191,36,0.16); color: var(--amber); }
 .status-chip.none { background: rgba(255,255,255,0.06); color: var(--muted); }
+.status-chip.interested { background: rgba(251,191,36,0.16); color: var(--amber); }
+
+/* ══ Interest & domains ════════════════════════════════ */
+.interest-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 16px; margin-bottom: 22px; }
+.interest-info { display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 0.9rem; }
+.interest-info svg { color: var(--pink); }
+.interest-info strong { color: var(--white); }
+.interest-toggle .filled { fill: currentColor; }
+.inline-star { color: var(--amber); vertical-align: -1px; }
+
+.pool-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.pool-controls .pool-search { margin-bottom: 0; flex: 1; }
+
+.member-chip.interested { border-color: rgba(251,191,36,0.4); }
+.chip-star { color: var(--amber); flex-shrink: 0; }
+.chip-domain { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.02em; flex-shrink: 0; }
+
+.team-domains { display: flex; flex-wrap: wrap; gap: 5px; }
+.domain-chip { font-size: 0.64rem; font-weight: 700; padding: 2px 7px; border-radius: 999px; }
+
+/* Needs-attention panel (overview) */
+.attention { background: linear-gradient(180deg, rgba(251,191,36,0.08), transparent); border: 1px solid rgba(251,191,36,0.25); border-radius: var(--r-lg); padding: 16px 18px; margin-bottom: 26px; }
+.attention-head { display: flex; align-items: center; gap: 8px; color: var(--amber); font-weight: 700; font-size: 0.92rem; margin-bottom: 10px; }
+.attention-list { display: flex; flex-direction: column; gap: 4px; }
+.attention-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--r-sm); cursor: pointer; transition: var(--t); }
+.attention-row:hover { background: rgba(255,255,255,0.04); }
+.attention-row .deadline-tag { flex-shrink: 0; min-width: 88px; }
+.attention-name { flex: 1; min-width: 0; color: var(--white); font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attention-todo { flex-shrink: 0; font-size: 0.78rem; color: var(--amber); font-weight: 600; }
+
+/* Overview tile personalization */
+.you-row { margin: 2px 0 10px; }
+.interest-count { display: inline-flex; align-items: center; gap: 3px; }
+.interest-count svg { color: var(--pink); }
+
+/* Calendar header + export */
+.cal-header-actions { display: flex; align-items: center; gap: 10px; }
+
+/* Member profile interest */
+.assignment-card.interested { border-color: rgba(251,191,36,0.3); }
+.interested-note { display: inline-flex; align-items: center; gap: 6px; color: var(--amber); font-size: 0.85rem; font-weight: 600; }
 
 /* ══ Responsive ════════════════════════════════════════ */
 @media (max-width: 1080px) {

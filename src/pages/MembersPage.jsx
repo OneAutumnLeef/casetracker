@@ -5,7 +5,7 @@ import { addMember, addMembers, updateMember, deleteMember } from '../firebase/s
 import { Plus, Search, Trash2, Edit3, User, Upload, Users } from 'lucide-react';
 import Modal from '../components/Modal';
 import Avatar from '../components/Avatar';
-import { AVATAR_COLORS, colorForName, parseMemberLines, composition, totalTeamsForMember } from '../utils';
+import { AVATAR_COLORS, colorForName, parseMemberLines, composition, totalTeamsForMember, DOMAINS, domainColor, domainAbbr } from '../utils';
 
 export default function MembersPage() {
   const { members, allTeams, loading } = useAppData();
@@ -84,6 +84,7 @@ export default function MembersPage() {
                 <div className="member-tags">
                   <span className={`mini-tag ${m.gender}`}>{m.gender === 'male' ? 'M' : 'F'}</span>
                   <span className="mini-tag bg">{m.background === 'engineering' ? 'Eng' : 'Non-eng'}</span>
+                  <span className="mini-tag domain" style={{ color: domainColor(m.domain), background: domainColor(m.domain) + '22' }}>{domainAbbr(m.domain)}</span>
                   <span className="mini-tag count">{totalTeamsForMember(allTeams, m.id)} teams</span>
                 </div>
               </div>
@@ -107,6 +108,7 @@ function MemberModal({ member, onClose }) {
     name: member?.name || '',
     gender: member?.gender || 'male',
     background: member?.background || 'engineering',
+    domain: member?.domain || 'General',
     color: member?.color || colorForName(member?.name || ''),
   });
   const [saving, setSaving] = useState(false);
@@ -141,6 +143,12 @@ function MemberModal({ member, onClose }) {
               <option value="engineering">Engineering</option><option value="non-engineering">Non-Engineering</option>
             </select>
           </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Domain / track</label>
+          <select className="form-input" value={form.domain} onChange={(e) => set('domain', e.target.value)}>
+            {DOMAINS.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
         </div>
         <div className="form-group">
           <label className="form-label">Avatar colour</label>
@@ -178,8 +186,8 @@ function BulkModal({ existing, onClose }) {
     <Modal onClose={onClose} title="Bulk import members">
       <div className="form-grid">
         <p className="muted sm">
-          One person per line. Optionally add gender and background after a comma — order doesn't matter.<br />
-          <code>Priya, female, non-engineering</code> · <code>Arjun, m, eng</code> · <code>Karthik</code>
+          One person per line. Optionally add gender, background and domain after commas — order doesn't matter.<br />
+          <code>Priya, female, non-eng, finance</code> · <code>Arjun, m, eng, consulting</code> · <code>Karthik</code>
         </p>
         <textarea
           className="form-input mono"
@@ -197,7 +205,7 @@ function BulkModal({ existing, onClose }) {
             <div className="bulk-chips">
               {fresh.slice(0, 30).map((m, i) => (
                 <span key={i} className="bulk-chip">
-                  <span className={`dot ${m.gender}`} /> {m.name} <em>{m.background === 'engineering' ? 'E' : 'N'}</em>
+                  <span className={`dot ${m.gender}`} /> {m.name} <em>{m.background === 'engineering' ? 'E' : 'N'} · {domainAbbr(m.domain)}</em>
                 </span>
               ))}
               {fresh.length > 30 && <span className="bulk-chip">+{fresh.length - 30} more</span>}

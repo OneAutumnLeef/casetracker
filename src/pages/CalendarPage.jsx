@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppData } from '../App';
 import {
-  Calendar, Award, Users, Layers, CalendarX, ChevronLeft, ChevronRight, List, LayoutGrid, Check, Clock, CircleDashed,
+  Calendar, Award, Users, Layers, CalendarX, ChevronLeft, ChevronRight, List, LayoutGrid, Check, Clock, CircleDashed, CalendarPlus,
 } from 'lucide-react';
 import {
   deadlineInfo, daysUntil, formatDate, eventType, EVENT_TYPES, EVENT_TYPE_KEYS,
-  eventsByDate, monthGrid, isoDate, sameDay, colorForName, initials,
+  eventsByDate, monthGrid, isoDate, sameDay, colorForName, initials, buildICS,
 } from '../utils';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -59,6 +59,14 @@ export default function CalendarPage() {
   const step = (delta) => { setSelected(null); setCursor((c) => { const d = new Date(c.y, c.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; }); };
   const goToday = () => { setSelected(null); setCursor({ y: now.getFullYear(), m: now.getMonth() }); };
   const selectedEvents = selected ? (byDate[selected] || []) : [];
+
+  const exportIcs = () => {
+    const ics = buildICS(viewComps, viewMember ? `${viewMember.name} — Case Comps` : 'Case Competitions');
+    const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = viewMember ? `${viewMember.name.replace(/[^\w]+/g, '-')}-casecomps.ics` : 'casetracker-deadlines.ics'; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const MonthView = (
     <div className="cal-wrap">
@@ -198,9 +206,12 @@ export default function CalendarPage() {
           <h1 className="hero-title">{viewMember ? `${viewMember.name.split(' ')[0]}'s calendar.` : 'Calendar.'}</h1>
           <p>{viewMember ? `Showing ${viewMember.name}'s competitions and registration status. Switch person from the top bar.` : 'Every deadline and round across all competitions, so nothing slips.'}</p>
         </div>
-        <div className="view-toggle">
-          <button className={`vt-btn${view === 'month' ? ' active' : ''}`} onClick={() => setView('month')}><LayoutGrid size={15} /> Month</button>
-          <button className={`vt-btn${view === 'list' ? ' active' : ''}`} onClick={() => setView('list')}><List size={15} /> List</button>
+        <div className="cal-header-actions">
+          <button className="btn btn-secondary" onClick={exportIcs} title="Download .ics for Google / Apple Calendar"><CalendarPlus size={15} /> Export</button>
+          <div className="view-toggle">
+            <button className={`vt-btn${view === 'month' ? ' active' : ''}`} onClick={() => setView('month')}><LayoutGrid size={15} /> Month</button>
+            <button className={`vt-btn${view === 'list' ? ' active' : ''}`} onClick={() => setView('list')}><List size={15} /> List</button>
+          </div>
         </div>
       </div>
 
